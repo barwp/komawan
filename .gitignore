@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.DS_Store
+.streamlit/secrets.toml
+data/*.db
+sentimentcloud-lite/data/*.db
+!sentimentcloud-lite/data/.gitkeep
+*.pdf
+*.zip
