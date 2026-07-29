@@ -20,7 +20,7 @@ Aplikasi ini tidak mengambil data langsung dari Instagram, TikTok, X/Twitter, at
 - Filter berdasarkan sentimen dan pencarian kata komentar.
 - Download hasil analisis dalam CSV.
 - Download ringkasan PDF.
-- Riwayat analisis sederhana menggunakan SQLite.
+- Riwayat analisis sederhana menggunakan SQLite lokal atau PostgreSQL cloud.
 - Tanpa login dan tanpa API media sosial.
 
 ## Struktur File
@@ -43,7 +43,8 @@ sentimentcloud-lite/
     └── sentimentcloud.db
 ```
 
-File `data/sentimentcloud.db` akan dibuat otomatis saat aplikasi berjalan.
+File `data/sentimentcloud.db` akan dibuat otomatis saat aplikasi berjalan lokal tanpa `DATABASE_URL`.
+Saat `DATABASE_URL` tersedia, aplikasi otomatis memakai PostgreSQL cloud.
 
 ## Instalasi Lokal
 
@@ -115,8 +116,43 @@ Contoh akun tidak diperlukan karena aplikasi ini berjalan tanpa login dan tanpa 
 
 Aplikasi ini dapat dideploy ke layanan cloud yang mendukung Docker atau aplikasi Python, seperti:
 
+- Streamlit Community Cloud
 - Google Cloud Run
 - Railway
 - Render
 
 Untuk deploy berbasis container, gunakan `Dockerfile` yang sudah tersedia.
+
+## Deploy ke Streamlit Community Cloud
+
+Untuk Streamlit Community Cloud, gunakan file utama di root repository:
+
+```text
+streamlit_app.py
+```
+
+Langkah ringkas:
+
+1. Push project ke GitHub.
+2. Buka Streamlit Community Cloud.
+3. Pilih repository.
+4. Isi main file path dengan `streamlit_app.py`.
+5. Tambahkan secrets jika menggunakan database cloud.
+
+## Database Cloud
+
+Aplikasi mendukung PostgreSQL cloud melalui environment variable atau Streamlit Secrets:
+
+```toml
+DATABASE_URL = "postgresql://username:password@host:port/database"
+```
+
+Jika `DATABASE_URL` tidak ada, aplikasi otomatis memakai SQLite lokal di `data/sentimentcloud.db`.
+
+Rekomendasi mudah untuk MVP:
+
+- Supabase PostgreSQL
+- Neon PostgreSQL
+- Railway PostgreSQL
+
+Untuk Supabase/Neon, copy connection string PostgreSQL dari dashboard lalu masukkan ke **Streamlit Cloud > App settings > Secrets**.
