@@ -7,7 +7,14 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from database import delete_history, fetch_history, init_db, save_history
+from database import (
+    delete_history,
+    fetch_history,
+    init_db,
+    save_history,
+    save_sentiment_results,
+    save_uploaded_csv,
+)
 from report_generator import build_insight, generate_summary_pdf
 from sentiment_analyzer import analyze_dataframe
 
@@ -396,7 +403,7 @@ def render_upload_page() -> None:
                             summary = make_summary(result_df)
                             analysis_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-                            save_history(
+                            analysis_id = save_history(
                                 topic=topic_name,
                                 analysis_date=analysis_date,
                                 total_comments=summary["total"],
@@ -404,6 +411,28 @@ def render_upload_page() -> None:
                                 negative_count=summary["Negatif"],
                                 neutral_count=summary["Netral"],
                             )
+                            save_uploaded_csv(
+                                analysis_id=analysis_id,
+                                file_name=uploaded_file.name,
+                                row_count=len(cleaned_df),
+                                column_count=len(cleaned_df.columns),
+                                csv_content=cleaned_df.to_csv(index=False),
+                            )
+                            result_rows = []
+                            for row_number, row in enumerate(result_df.to_dict("records"), start=1):
+                                result_rows.append(
+                                    {
+                                        "row_number": row_number,
+                                        "username": row.get("username"),
+                                        "comment": row.get("comment", ""),
+                                        "processed_comment": row.get("processed_comment", ""),
+                                        "positive_score": row.get("positive_score", 0),
+                                        "negative_score": row.get("negative_score", 0),
+                                        "sentiment": row.get("sentiment", ""),
+                                        "created_at": row.get("created_at"),
+                                    }
+                                )
+                            save_sentiment_results(analysis_id, result_rows)
 
                             st.session_state.analysis_df = result_df
                             st.session_state.topic = topic_name

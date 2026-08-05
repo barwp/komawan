@@ -1,6 +1,7 @@
 import os
 import sqlite3
 from pathlib import Path
+from typing import Optional
 
 try:
     import psycopg2
@@ -48,13 +49,43 @@ def init_db() -> None:
                 cur.execute(
                     """
                     CREATE TABLE IF NOT EXISTS analysis_history (
-                        id SERIAL PRIMARY KEY,
+                        id BIGSERIAL PRIMARY KEY,
                         topic TEXT NOT NULL,
                         analysis_date TEXT NOT NULL,
                         total_comments INTEGER NOT NULL,
                         positive_count INTEGER NOT NULL,
                         negative_count INTEGER NOT NULL,
                         neutral_count INTEGER NOT NULL
+                    )
+                    """
+                )
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS uploaded_csv_files (
+                        id BIGSERIAL PRIMARY KEY,
+                        analysis_id BIGINT NOT NULL REFERENCES analysis_history(id) ON DELETE CASCADE,
+                        file_name TEXT NOT NULL,
+                        row_count INTEGER NOT NULL,
+                        column_count INTEGER NOT NULL,
+                        csv_content TEXT NOT NULL,
+                        uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                    """
+                )
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS sentiment_results (
+                        id BIGSERIAL PRIMARY KEY,
+                        analysis_id BIGINT NOT NULL REFERENCES analysis_history(id) ON DELETE CASCADE,
+                        row_number INTEGER NOT NULL,
+                        username TEXT,
+                        comment TEXT NOT NULL,
+                        processed_comment TEXT NOT NULL,
+                        positive_score INTEGER NOT NULL,
+                        negative_score INTEGER NOT NULL,
+                        sentiment TEXT NOT NULL,
+                        created_at TEXT,
+                        analyzed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                     )
                     """
                 )
@@ -74,6 +105,38 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS uploaded_csv_files (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                analysis_id INTEGER NOT NULL,
+                file_name TEXT NOT NULL,
+                row_count INTEGER NOT NULL,
+                column_count INTEGER NOT NULL,
+                csv_content TEXT NOT NULL,
+                uploaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (analysis_id) REFERENCES analysis_history(id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS sentiment_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                analysis_id INTEGER NOT NULL,
+                row_number INTEGER NOT NULL,
+                username TEXT,
+                comment TEXT NOT NULL,
+                processed_comment TEXT NOT NULL,
+                positive_score INTEGER NOT NULL,
+                negative_score INTEGER NOT NULL,
+                sentiment TEXT NOT NULL,
+                created_at TEXT,
+                analyzed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (analysis_id) REFERENCES analysis_history(id) ON DELETE CASCADE
+            )
+            """
+        )
 
 
 def save_history(
@@ -83,7 +146,7 @@ def save_history(
     positive_count: int,
     negative_count: int,
     neutral_count: int,
-) -> None:
+) -> int:
     if using_postgres():
         with get_connection() as conn:
             with conn.cursor() as cur:
@@ -98,6 +161,7 @@ def save_history(
                         neutral_count
                     )
                     VALUES (%s, %s, %s, %s, %s, %s)
+                    RETURNING id
                     """,
                     (
                         topic,
@@ -108,10 +172,12 @@ def save_history(
                         neutral_count,
                     ),
                 )
+                history_id = cur.fetchone()[0]
+                return int(history_id)
         return
 
     with get_connection() as conn:
-        conn.execute(
+        cursor = conn.execute(
             """
             INSERT INTO analysis_history (
                 topic,
@@ -131,6 +197,109 @@ def save_history(
                 negative_count,
                 neutral_count,
             ),
+        )
+        return int(cursor.lastrowid)
+
+
+def save_uploaded_csv(
+    analysis_id: int,
+    file_name: str,
+    row_count: int,
+    column_count: int,
+    csv_content: str,
+) -> None:
+    if using_postgres():
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO uploaded_csv_files (
+                        analysis_id,
+                        file_name,
+                        row_count,
+                        column_count,
+                        csv_content
+                    )
+                    VALUES (%s, %s, %s, %s, %s)
+                    """,
+                    (analysis_id, file_name, row_count, column_count, csv_content),
+                )
+        return
+
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO uploaded_csv_files (
+                analysis_id,
+                file_name,
+                row_count,
+                column_count,
+                csv_content
+            )
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (analysis_id, file_name, row_count, column_count, csv_content),
+        )
+
+
+def save_sentiment_results(analysis_id: int, rows: list[dict[str, object]]) -> None:
+    if not rows:
+        return
+
+    values = [
+        (
+            analysis_id,
+            int(row.get("row_number", 0)),
+            _optional_text(row.get("username")),
+            str(row.get("comment", "")),
+            str(row.get("processed_comment", "")),
+            int(row.get("positive_score", 0)),
+            int(row.get("negative_score", 0)),
+            str(row.get("sentiment", "")),
+            _optional_text(row.get("created_at")),
+        )
+        for row in rows
+    ]
+
+    if using_postgres():
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.executemany(
+                    """
+                    INSERT INTO sentiment_results (
+                        analysis_id,
+                        row_number,
+                        username,
+                        comment,
+                        processed_comment,
+                        positive_score,
+                        negative_score,
+                        sentiment,
+                        created_at
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    values,
+                )
+        return
+
+    with get_connection() as conn:
+        conn.executemany(
+            """
+            INSERT INTO sentiment_results (
+                analysis_id,
+                row_number,
+                username,
+                comment,
+                processed_comment,
+                positive_score,
+                negative_score,
+                sentiment,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            values,
         )
 
 
@@ -182,3 +351,10 @@ def delete_history(history_id: int) -> None:
 
     with get_connection() as conn:
         conn.execute("DELETE FROM analysis_history WHERE id = ?", (history_id,))
+
+
+def _optional_text(value: object) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value)
+    return text if text.strip() else None

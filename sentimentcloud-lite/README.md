@@ -149,6 +149,12 @@ DATABASE_URL = "postgresql://username:password@host:port/database"
 
 Jika `DATABASE_URL` tidak ada, aplikasi otomatis memakai SQLite lokal di `data/sentimentcloud.db`.
 
+Alur penyimpanan database:
+
+- `analysis_history`: menyimpan ringkasan analisis, seperti topik, tanggal, total komentar, positif, negatif, dan netral.
+- `uploaded_csv_files`: menyimpan file CSV asli yang diunggah pengguna dalam bentuk teks.
+- `sentiment_results`: menyimpan hasil analisis per komentar, termasuk komentar asli, hasil preprocessing, skor positif, skor negatif, dan label sentimen.
+
 Rekomendasi mudah untuk MVP:
 
 - Supabase PostgreSQL
