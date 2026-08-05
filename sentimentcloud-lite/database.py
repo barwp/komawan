@@ -1,6 +1,7 @@
 import os
 import sqlite3
 from pathlib import Path
+from urllib.parse import urlparse
 from typing import Optional
 
 try:
@@ -21,14 +22,58 @@ def get_database_url() -> str:
     try:
         import streamlit as st
 
-        return st.secrets.get("DATABASE_URL", "")
+        secret_keys = (
+            "DATABASE_URL",
+            "SUPABASE_DATABASE_URL",
+            "SUPABASE_DB_URL",
+            "POSTGRES_URL",
+            "POSTGRESQL_URL",
+        )
+        for key in secret_keys:
+            value = st.secrets.get(key, "")
+            if value:
+                return str(value)
+
+        connections = st.secrets.get("connections", {})
+        if isinstance(connections, dict):
+            for config in connections.values():
+                if isinstance(config, dict):
+                    for key in ("url", "uri", "database_url", "DATABASE_URL"):
+                        value = config.get(key, "")
+                        if value:
+                            return str(value)
     except Exception:
         return ""
+    return ""
 
 
 def using_postgres() -> bool:
     database_url = get_database_url()
     return database_url.startswith(("postgres://", "postgresql://"))
+
+
+def get_database_status() -> dict[str, str]:
+    database_url = get_database_url()
+    if not database_url:
+        return {
+            "mode": "SQLite Lokal",
+            "detail": str(DB_PATH),
+            "host": "local",
+        }
+
+    parsed = urlparse(database_url)
+    if parsed.scheme in ("postgres", "postgresql"):
+        return {
+            "mode": "PostgreSQL Cloud",
+            "detail": "DATABASE_URL aktif",
+            "host": parsed.hostname or "unknown-host",
+        }
+
+    return {
+        "mode": "Konfigurasi database tidak valid",
+        "detail": "DATABASE_URL harus diawali postgres:// atau postgresql://",
+        "host": parsed.hostname or "unknown-host",
+    }
 
 
 def get_connection():

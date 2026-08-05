@@ -147,6 +147,16 @@ Aplikasi mendukung PostgreSQL cloud melalui environment variable atau Streamlit 
 DATABASE_URL = "postgresql://username:password@host:port/database"
 ```
 
+Untuk Streamlit Community Cloud, simpan nilai tersebut di **App settings > Secrets**. Nama key yang direkomendasikan tetap `DATABASE_URL`.
+Setelah secrets disimpan, reboot aplikasi. Di sidebar aplikasi akan muncul status:
+
+```text
+Database: PostgreSQL Cloud
+Host: db.<project-ref>.supabase.co
+```
+
+Jika status masih `SQLite Lokal`, berarti `DATABASE_URL` belum terbaca oleh Streamlit.
+
 Jika `DATABASE_URL` tidak ada, aplikasi otomatis memakai SQLite lokal di `data/sentimentcloud.db`.
 
 Alur penyimpanan database:

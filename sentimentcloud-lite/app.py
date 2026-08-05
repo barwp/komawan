@@ -11,6 +11,7 @@ from database import (
     delete_history,
     fetch_analysis_detail,
     fetch_history,
+    get_database_status,
     init_db,
     save_history,
     save_sentiment_results,
@@ -759,13 +760,15 @@ def render_history_page() -> None:
 def render_about_page() -> None:
     render_header()
     st.subheader("Tentang Aplikasi")
+    db_status = get_database_status()
     st.write(
         """
         SentimentCloud Lite adalah MVP analisis sentimen komentar media sosial berbasis CSV.
         Aplikasi ini menggunakan preprocessing teks sederhana, lexicon Bahasa Indonesia,
-        visualisasi Plotly, dan penyimpanan riwayat dengan SQLite.
+        visualisasi Plotly, dan penyimpanan data melalui SQLite lokal atau PostgreSQL cloud.
         """
     )
+    st.info(f"Database aktif: {db_status['mode']} ({db_status['host']})")
     st.write("Aplikasi ini tidak menggunakan login, API media sosial, GPU, atau model machine learning besar.")
     st.markdown(
         """
@@ -790,6 +793,9 @@ def main() -> None:
     st.sidebar.divider()
     st.sidebar.markdown("**SentimentCloud Lite**")
     st.sidebar.caption("Analisis sentimen CSV berbasis cloud.")
+    db_status = get_database_status()
+    st.sidebar.caption(f"Database: {db_status['mode']}")
+    st.sidebar.caption(f"Host: {db_status['host']}")
 
     if page == "Upload & Analisis":
         render_upload_page()
