@@ -9,6 +9,7 @@ import streamlit as st
 
 from database import (
     delete_history,
+    fetch_analysis_detail,
     fetch_history,
     init_db,
     save_history,
@@ -340,6 +341,35 @@ def calculate_percentage(value: int, total: int) -> str:
 def reset_filters() -> None:
     st.session_state.sentiment_filter = "Semua"
     st.session_state.search_filter = ""
+
+
+def open_history_in_dashboard(history_id: int) -> None:
+    history, results = fetch_analysis_detail(history_id)
+    if history is None:
+        st.error("Riwayat tidak ditemukan di database.")
+        return
+    if not results:
+        st.warning(
+            "Detail komentar untuk riwayat ini belum tersedia. "
+            "Riwayat lama hanya menyimpan ringkasan; jalankan analisis ulang agar CSV dan hasil sentimen tersimpan lengkap."
+        )
+        return
+
+    result_df = pd.DataFrame(results)
+    summary = {
+        "total": int(history["total_comments"]),
+        "Positif": int(history["positive_count"]),
+        "Negatif": int(history["negative_count"]),
+        "Netral": int(history["neutral_count"]),
+    }
+    st.session_state.analysis_df = result_df
+    st.session_state.topic = str(history["topic"])
+    st.session_state.analysis_date = str(history["analysis_date"])
+    st.session_state.summary = summary
+    st.session_state.sentiment_filter = "Semua"
+    st.session_state.search_filter = ""
+    st.session_state.selected_page = "Dashboard"
+    st.rerun()
 
 
 def render_header() -> None:
@@ -693,12 +723,33 @@ def render_history_page() -> None:
     )
 
     with st.container(border=True):
-        render_section("Kelola Riwayat")
-        options = {
-            f"{row['topic']} - {row['analysis_date']}": row["id"]
-            for row in history
-        }
-        selected_label = st.selectbox("Pilih riwayat", list(options.keys()))
+        render_section(
+            "Buka Riwayat ke Dashboard",
+            "Klik salah satu riwayat untuk menampilkan kembali hasil analisisnya di Dashboard.",
+        )
+        for row in history:
+            label = f"{row['topic']} | {row['analysis_date']} | {row['total_comments']} komentar"
+            left, right = st.columns([3, 1])
+            with left:
+                st.markdown(f"**{escape(str(row['topic']))}**")
+                st.caption(
+                    f"{row['analysis_date']} | Total {row['total_comments']} | "
+                    f"Positif {row['positive_count']} | Negatif {row['negative_count']} | Netral {row['neutral_count']}"
+                )
+            with right:
+                st.button(
+                    "Buka Dashboard",
+                    key=f"open_history_{row['id']}",
+                    width="stretch",
+                    on_click=open_history_in_dashboard,
+                    args=(int(row["id"]),),
+                    help=label,
+                )
+
+    with st.container(border=True):
+        render_section("Hapus Riwayat")
+        options = {f"{row['topic']} - {row['analysis_date']}": row["id"] for row in history}
+        selected_label = st.selectbox("Pilih riwayat yang akan dihapus", list(options.keys()))
         if st.button("Hapus Riwayat Terpilih", type="secondary"):
             delete_history(options[selected_label])
             st.success("Riwayat berhasil dihapus.")

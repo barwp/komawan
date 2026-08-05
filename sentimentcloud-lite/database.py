@@ -342,6 +342,86 @@ def fetch_history():
     return [dict(row) for row in rows]
 
 
+def fetch_analysis_detail(history_id: int) -> tuple[Optional[dict[str, object]], list[dict[str, object]]]:
+    if using_postgres():
+        with get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        id,
+                        topic,
+                        analysis_date,
+                        total_comments,
+                        positive_count,
+                        negative_count,
+                        neutral_count
+                    FROM analysis_history
+                    WHERE id = %s
+                    """,
+                    (history_id,),
+                )
+                history = cur.fetchone()
+                cur.execute(
+                    """
+                    SELECT
+                        row_number,
+                        username,
+                        comment,
+                        created_at,
+                        processed_comment,
+                        positive_score,
+                        negative_score,
+                        sentiment
+                    FROM sentiment_results
+                    WHERE analysis_id = %s
+                    ORDER BY row_number ASC
+                    """,
+                    (history_id,),
+                )
+                results = cur.fetchall()
+                return (dict(history) if history else None, [dict(row) for row in results])
+
+    with get_connection() as conn:
+        conn.row_factory = sqlite3.Row
+        history_row = conn.execute(
+            """
+            SELECT
+                id,
+                topic,
+                analysis_date,
+                total_comments,
+                positive_count,
+                negative_count,
+                neutral_count
+            FROM analysis_history
+            WHERE id = ?
+            """,
+            (history_id,),
+        ).fetchone()
+        result_rows = conn.execute(
+            """
+            SELECT
+                row_number,
+                username,
+                comment,
+                created_at,
+                processed_comment,
+                positive_score,
+                negative_score,
+                sentiment
+            FROM sentiment_results
+            WHERE analysis_id = ?
+            ORDER BY row_number ASC
+            """,
+            (history_id,),
+        ).fetchall()
+    return (
+        dict(history_row) if history_row else None,
+        [dict(row) for row in result_rows],
+    )
+
+
 def delete_history(history_id: int) -> None:
     if using_postgres():
         with get_connection() as conn:
